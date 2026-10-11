@@ -1,0 +1,8 @@
+[build]
+# Windows-specific build configuration
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-L", "C:\\Program Files\\PostgreSQL\\18\\lib"]
+
+[env]
+PG_CONFIG = "C:\\Program Files\\PostgreSQL\\18\\bin\\pg_config.exe"
