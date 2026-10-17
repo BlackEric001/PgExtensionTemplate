@@ -8,6 +8,8 @@ use pgrx::prelude::*;
 use std::ffi::CStr;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
+use pgrx::GucSetting;
+use std::ffi::CString;
 
 mod config;
 mod rules;
@@ -21,36 +23,35 @@ static mut VALIDATOR: Option<QueryValidator> = None;
 static INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 // Store original hooks for chaining
-static mut PREV_POST_PARSE_ANALYZE_HOOK: Option<
-    pgrx::hooks::post_parse_analyze_hook_type,
-> = None;
-static mut PREV_PROCESS_UTILITY_HOOK: Option<
-    pgrx::hooks::ProcessUtility_hook_type,
-> = None;
+static mut PREV_POST_PARSE_ANALYZE_HOOK:
+pgrx::pg_sys::post_parse_analyze_hook_type = None;
+
+static mut PREV_PROCESS_UTILITY_HOOK:
+pgrx::pg_sys::ProcessUtility_hook_type = None;
 
 // GUC variable for config file path
-static mut CONFIG_PATH: *mut std::os::raw::c_char = std::ptr::null_mut();
+static CONFIG_PATH: GucSetting<Option<CString>> = GucSetting::<Option<CString>>::new(None);
 
 pgrx::pg_module_magic!();
 
 /// Extension initialization - called when the shared library is loaded
 #[allow(non_snake_case)]
 #[pg_guard]
-pub extern "C" fn _PG_init() {
+pub extern "C-unwind" fn _PG_init() {
     // Define GUC for config file path
-    unsafe {
         pgrx::GucRegistry::define_string_guc(
-            "pg_query_validator.config_path",
-            "Path to the JSON configuration file.",
-            "This file contains rules for validating incoming SQL queries.",
+            c"pg_query_validator.config_path",
+            c"Path to the JSON configuration file.",
+            c"This file contains rules for validating incoming SQL queries.",
             &CONFIG_PATH,
-            pgrx::GucContext::Suseset,
+            pgrx::GucContext::Suset,
             pgrx::GucFlags::SUPERUSER_ONLY,
         );
-    }
 
     // Install hooks
-    install_hooks();
+    unsafe {
+        install_hooks();
+    }
 
     // Load configuration
     load_config();
@@ -61,13 +62,17 @@ pub extern "C" fn _PG_init() {
 
 /// Install PostgreSQL hooks for query interception
 unsafe fn install_hooks() {
-    // Install post_parse_analyze_hook - fires after query parsing
-    PREV_POST_PARSE_ANALYZE_HOOK = pgrx::hooks::post_parse_analyze_hook();
-    pgrx::hooks::set_post_parse_analyze_hook(Some(post_parse_analyze_hook));
+    PREV_POST_PARSE_ANALYZE_HOOK =
+        pgrx::pg_sys::post_parse_analyze_hook;
 
-    // Install ProcessUtility_hook - fires for utility commands
-    PREV_PROCESS_UTILITY_HOOK = pgrx::hooks::ProcessUtility_hook();
-    pgrx::hooks::set_ProcessUtility_hook(Some(process_utility_hook));
+    pgrx::pg_sys::post_parse_analyze_hook =
+        Some(post_parse_analyze_hook);
+
+    PREV_PROCESS_UTILITY_HOOK =
+        pgrx::pg_sys::ProcessUtility_hook;
+
+    pgrx::pg_sys::ProcessUtility_hook =
+        Some(process_utility_hook);
 }
 
 /// Load configuration from JSON file
@@ -90,14 +95,14 @@ fn load_config() {
 }
 
 fn get_config_path() -> String {
-    unsafe {
-        if !CONFIG_PATH.is_null() {
-            let c_str = CStr::from_ptr(CONFIG_PATH);
-            if let Ok(path) = c_str.to_str() {
-                return path.to_string();
+    if let Some(value) = CONFIG_PATH.get() {
+        if let Ok(path) = value.into_string() {
+            if !path.is_empty() {
+                return path;
             }
         }
     }
+
     default_config_path()
 }
 
@@ -115,7 +120,7 @@ fn default_config_path() -> String {
 
 /// Hook: Called after a query is parsed and analyzed
 #[pg_guard]
-unsafe extern "C" fn post_parse_analyze_hook(
+unsafe extern "C-unwind" fn post_parse_analyze_hook(
     pstate: *mut pgrx::pg_sys::ParseState,
     query: *mut pgrx::pg_sys::Query,
     query_env: *mut pgrx::pg_sys::JumbleState,
@@ -140,11 +145,11 @@ unsafe extern "C" fn post_parse_analyze_hook(
 
 /// Hook: Called for utility commands (CREATE, DROP, ALTER, etc.)
 #[pg_guard]
-unsafe extern "C" fn process_utility_hook(
+unsafe extern "C-unwind" fn process_utility_hook(
     pstmt: *mut pgrx::pg_sys::PlannedStmt,
     query_string: *const std::os::raw::c_char,
     read_only_tree: bool,
-    context: pgrx::pg_sys::ProcessUtilityContext,
+    context: pgrx::pg_sys::ProcessUtilityContext::Type,
     params: pgrx::pg_sys::ParamListInfo,
     query_env: *mut pgrx::pg_sys::QueryEnvironment,
     dest: *mut pgrx::pg_sys::DestReceiver,
