@@ -250,6 +250,9 @@ impl QueryValidator {
             RuleType::ComplexityLimit => {
                 if let Some(max_joins) = rule.config.get("max_joins").and_then(|v| v.as_u64()) {
                     let count = query.to_uppercase().matches(" JOIN ").count();
+
+                    pgrx::log!("pg_query_validator: complexity check: joins={}, max_joins={}", count, max_joins);
+
                     if count > max_joins as usize {
                         return Err(format!("{}: too many JOINs", msg));
                     }

@@ -14,6 +14,7 @@ use std::ffi::CString;
 mod config;
 mod rules;
 mod validator;
+mod utils;
 
 use config::ValidatorConfig;
 use validator::QueryValidator;
@@ -103,19 +104,7 @@ fn get_config_path() -> String {
         }
     }
 
-    default_config_path()
-}
-
-fn default_config_path() -> String {
-    let candidates = vec![
-        PathBuf::from("/etc/postgresql/pg_query_validator.json"),
-        PathBuf::from("/var/lib/postgresql/pg_query_validator.json"),
-        PathBuf::from("./pg_query_validator.json"),
-    ];
-    for path in candidates {
-        if path.exists() { return path.to_string_lossy().to_string(); }
-    }
-    "/etc/postgresql/pg_query_validator.json".to_string()
+    utils::default_config_path()
 }
 
 /// Hook: Called after a query is parsed and analyzed
@@ -135,6 +124,8 @@ unsafe extern "C-unwind" fn post_parse_analyze_hook(
         if !query.is_null() {
             let query_ref = &*query;
             if let Some(query_text) = get_query_text(pstate) {
+                pgrx::log!("pg_query_validator: source text: {}", query_text);
+
                 if let Err(error_msg) = validator.validate_query(&query_text, query_ref) {
                     pgrx::error!("Query validation failed: {}", error_msg);
                 }

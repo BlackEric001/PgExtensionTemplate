@@ -19,3 +19,14 @@ WHERE name = 'pg_query_validator';
 Для ручной проверки запроса выполнить SELECT validate_query('SELECT 1');
 
 При повторной установке расширения необходимо остановить службу PostgreSQL. В противном случае Windows не даст заменить файлы.
+
+После установки расширения файл pg_query_validator.json нужно скопировать в каталог к которому есть доступ у службы PostgreSQL. Например C:\Program Files\PostgreSQL\18\data\pg_query_validator.json
+Затем нужно добавить путь в конец файла postgresql.conf строку
+pg_query_validator.config_path = 'C:/Program Files/PostgreSQL/18/data/pg_query_validator.json'
+
+Выполнить запрос
+SHOW shared_preload_libraries;
+Потом в список расширений через запятую добавить pg_query_validator
+ALTER SYSTEM SET shared_preload_libraries = 'pg_query_validator';
+
+После этого службу PostgreSQL нужно перезапустить. Расширение будет автоматически валидировать запросы.

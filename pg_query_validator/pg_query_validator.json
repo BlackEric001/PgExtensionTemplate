@@ -60,7 +60,7 @@
   "access_control": {
     "read_only_tables": ["audit_log", "system_config"],
     "blocked_tables": ["pg_shadow", "pg_authid"],
-    "blocked_schemas": ["pg_catalog"],
+    "blocked_schemas": [],
     "allowed_schemas": []
   },
   "rate_limiting": {
