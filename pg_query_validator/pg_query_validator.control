@@ -2,3 +2,4 @@ comment = 'Шаблон расширения для PostgreSQL на языке R
 default_version = '0.1.0'
 module_pathname = '$libdir/pg_query_validator'
 relocatable = false
+superuser = true
