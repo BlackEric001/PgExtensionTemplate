@@ -116,15 +116,42 @@ echo.
 echo [INFO] Checking PostgreSQL extension DLL...
 
 set "PG_LIB_DIR="
-for /f "usebackq delims=" %%I in (`"%PG_CONFIG%" --pkglibdir`) do set "PG_LIB_DIR=%%I"
 
-if exist "%PG_LIB_DIR%\pg_query_validator.dll" (
-    echo [INFO] Existing DLL found:
-    echo "%PG_LIB_DIR%\pg_query_validator.dll"
-    echo [INFO] It will be replaced by cargo pgrx.
-    echo If replacement fails with Access denied, stop PostgreSQL
-    echo and run this script again as Administrator.
+for /f "delims=" %%I in ('"%PG_CONFIG%" --pkglibdir 2^>nul') do (
+    set "PG_LIB_DIR=%%I"
 )
+
+if not defined PG_LIB_DIR (
+    echo [ERROR] Could not determine PostgreSQL library directory.
+    echo Command: "%PG_CONFIG%" --pkglibdir
+    goto :fail_pop
+)
+
+echo [INFO] PostgreSQL library directory:
+echo "%PG_LIB_DIR%"
+
+set "EXT_DLL=%PG_LIB_DIR%\pg_query_validator.dll"
+
+echo [INFO] Checking:
+echo "%EXT_DLL%"
+
+if exist "%EXT_DLL%" (
+    echo.
+    echo [WARNING] Existing extension DLL found!
+    echo "%EXT_DLL%"
+    echo.
+    echo The installer will attempt to replace this file.
+    echo If access is denied, PostgreSQL may be using the DLL.
+    echo Stop the PostgreSQL 18 service and run this script
+    echo again as Administrator.
+    echo.
+) else (
+    echo [INFO] Existing extension DLL not found.
+    echo A new DLL will be installed.
+)
+
+echo [INFO] DLL pre-check completed.
+echo.
 
 cargo pgrx install --release --features pg18 --pg-config "%PG_CONFIG%"
 if errorlevel 1 (
