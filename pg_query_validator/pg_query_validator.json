@@ -47,7 +47,7 @@
       "pattern": "union\\s+(all\\s+)?select",
       "case_insensitive": true,
       "message": "UNION SELECT is not allowed",
-      "applies_to": []
+      "applies_to": ["UPDATE"]
     },
     {
       "name": "Dangerous system functions",

@@ -122,11 +122,10 @@ unsafe extern "C-unwind" fn post_parse_analyze_hook(
     // Validate the query
     if let Some(ref validator) = VALIDATOR {
         if !query.is_null() {
-            let query_ref = &*query;
             if let Some(query_text) = get_query_text(pstate) {
                 pgrx::log!("pg_query_validator: source text: {}", query_text);
 
-                if let Err(error_msg) = validator.validate_query(&query_text, query_ref) {
+                if let Err(error_msg) = validator.validate_query(&query_text) {
                     pgrx::error!("Query validation failed: {}", error_msg);
                 }
             }

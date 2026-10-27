@@ -53,7 +53,7 @@ impl QueryValidator {
     }
 
     pub fn validate_query(
-        &self, query_text: &str, _query: &pgrx::pg_sys::Query,
+        &self, query_text: &str, 
     ) -> Result<(), String> {
         if !self.config.settings.enabled { return Ok(()); }
         let query_upper = query_text.to_uppercase();
@@ -249,11 +249,15 @@ impl QueryValidator {
             }
             RuleType::ComplexityLimit => {
                 if let Some(max_joins) = rule.config.get("max_joins").and_then(|v| v.as_u64()) {
-                    let count = query.to_uppercase().matches(" JOIN ").count();
+                    let count_joins = query.to_uppercase().matches(" JOIN ").count();
 
-                    pgrx::log!("pg_query_validator: complexity check: joins={}, max_joins={}", count, max_joins);
+                    pgrx::log!("pg_query_validator: complexity check: joins={}, max_joins={}", count_joins, max_joins);
+                    pgrx::log!("pg_query_validator: complexity check: query11={}", query);
 
-                    if count > max_joins as usize {
+                    if count_joins as u64 > max_joins {
+                        pgrx::log!("pg_query_validator: complexity check: joins22={}, max_joins={}", count_joins, max_joins);
+                        pgrx::log!("pg_query_validator: complexity check: query22={}", query);
+                        //pgrx::log!("pg_query_validator: complexity check: msg={}", msg);
                         return Err(format!("{}: too many JOINs", msg));
                     }
                 }
