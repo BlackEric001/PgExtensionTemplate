@@ -122,9 +122,13 @@ unsafe extern "C-unwind" fn post_parse_analyze_hook(
     // Validate the query
     if let Some(ref validator) = VALIDATOR {
         if !query.is_null() {
-            if let Some(query_text) = get_query_text(pstate) {
-                pgrx::log!("pg_query_validator: source text: {}", query_text);
+            // Skip system sql queries
+            if is_system_query(query, pstate) {
+                return;
+            }
 
+            if let Some(query_text) = get_query_text(pstate) {
+                pgrx::log!("pg_query_validator: Validating user query: {}", query_text);
                 if let Err(error_msg) = validator.validate_query(&query_text) {
                     pgrx::error!("Query validation failed: {}", error_msg);
                 }
@@ -209,4 +213,61 @@ fn validate_query(query_text: &str) -> String {
             "{\"error\": \"Validator not initialized\"}".to_string()
         }
     }
+}
+
+/// Determines whether the request is system-generated (not user-generated)
+unsafe fn is_system_query(query: *mut pgrx::pg_sys::Query, pstate: *mut pgrx::pg_sys::ParseState) -> bool {
+    if query.is_null() {
+        return false;
+    }
+
+    let q = &*query;
+
+    // Checking the source of the sql query
+    // QSRC_ORIGINAL = query from the user
+    // Other values = system/internal queries
+    if q.querySource != pgrx::pg_sys::QuerySource::QSRC_ORIGINAL {
+        pgrx::log!("pg_query_validator: Skipping system query (source: {:?})", q.querySource);
+        return true;
+    }
+
+    // Additionally check application_name
+    let app_name = pgrx::pg_sys::application_name;
+    if !app_name.is_null() {
+        if let Ok(c_str) = CStr::from_ptr(app_name).to_str() {
+            let app = c_str.to_lowercase();
+            let system_apps = [
+                "pg_dump", "pg_restore", "vacuum", "autovacuum",
+                "wal sender", "walsender", "walwriter", "bgworker",
+                "archiver", "stats collector"
+            ];
+
+            for sys_app in &system_apps {
+                if app.contains(sys_app) {
+                    pgrx::log!("pg_query_validator: Skipping query from system app: {}", c_str);
+                    return true;
+                }
+            }
+        }
+    }
+
+    // Checking if the query accesses system tables
+    if !pstate.is_null() {
+        let ps = &*pstate;
+        if !ps.p_sourcetext.is_null() {
+            if let Ok(source) = CStr::from_ptr(ps.p_sourcetext).to_str() {
+                let source_upper = source.to_uppercase();
+
+                // Пропускаем запросы к системным каталогам
+                if source_upper.contains("PG_CATALOG.")
+                    || source_upper.contains("INFORMATION_SCHEMA.")
+                    || (source_upper.contains("PG_") && !source_upper.contains(" FROM PG_")) {
+                    pgrx::log!("pg_query_validator: Skipping query to system catalog");
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
 }
