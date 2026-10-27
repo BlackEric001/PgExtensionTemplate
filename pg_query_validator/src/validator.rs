@@ -167,7 +167,10 @@ impl QueryValidator {
     }
 
     fn has_where_clause(&self, query: &str) -> bool {
-        query.to_uppercase().contains(" WHERE ")
+        // \s in regex = space, tab, line feed
+        // \b = word boundary
+        let re = Regex::new(r"(?i)\bWHERE\b").unwrap();
+        re.is_match(query)
     }
 
     fn check_access_control(
