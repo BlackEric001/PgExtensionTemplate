@@ -5,16 +5,16 @@
 //! No explicit function calls are needed from the user side.
 
 use pgrx::prelude::*;
+use pgrx::GucSetting;
 use std::ffi::CStr;
+use std::ffi::CString;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use pgrx::GucSetting;
-use std::ffi::CString;
 
 mod config;
 mod rules;
-mod validator;
 mod utils;
+mod validator;
 
 use config::ValidatorConfig;
 use validator::QueryValidator;
@@ -24,11 +24,9 @@ static mut VALIDATOR: Option<QueryValidator> = None;
 static INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 // Store original hooks for chaining
-static mut PREV_POST_PARSE_ANALYZE_HOOK:
-pgrx::pg_sys::post_parse_analyze_hook_type = None;
+static mut PREV_POST_PARSE_ANALYZE_HOOK: pgrx::pg_sys::post_parse_analyze_hook_type = None;
 
-static mut PREV_PROCESS_UTILITY_HOOK:
-pgrx::pg_sys::ProcessUtility_hook_type = None;
+static mut PREV_PROCESS_UTILITY_HOOK: pgrx::pg_sys::ProcessUtility_hook_type = None;
 
 // GUC variable for config file path
 static CONFIG_PATH: GucSetting<Option<CString>> = GucSetting::<Option<CString>>::new(None);
@@ -40,14 +38,14 @@ pgrx::pg_module_magic!();
 #[pg_guard]
 pub extern "C-unwind" fn _PG_init() {
     // Define GUC for config file path
-        pgrx::GucRegistry::define_string_guc(
-            c"pg_query_validator.config_path",
-            c"Path to the JSON configuration file.",
-            c"This file contains rules for validating incoming SQL queries.",
-            &CONFIG_PATH,
-            pgrx::GucContext::Suset,
-            pgrx::GucFlags::SUPERUSER_ONLY,
-        );
+    pgrx::GucRegistry::define_string_guc(
+        c"pg_query_validator.config_path",
+        c"Path to the JSON configuration file.",
+        c"This file contains rules for validating incoming SQL queries.",
+        &CONFIG_PATH,
+        pgrx::GucContext::Suset,
+        pgrx::GucFlags::SUPERUSER_ONLY,
+    );
 
     // Install hooks
     unsafe {
@@ -63,17 +61,13 @@ pub extern "C-unwind" fn _PG_init() {
 
 /// Install PostgreSQL hooks for query interception
 unsafe fn install_hooks() {
-    PREV_POST_PARSE_ANALYZE_HOOK =
-        pgrx::pg_sys::post_parse_analyze_hook;
+    PREV_POST_PARSE_ANALYZE_HOOK = pgrx::pg_sys::post_parse_analyze_hook;
 
-    pgrx::pg_sys::post_parse_analyze_hook =
-        Some(post_parse_analyze_hook);
+    pgrx::pg_sys::post_parse_analyze_hook = Some(post_parse_analyze_hook);
 
-    PREV_PROCESS_UTILITY_HOOK =
-        pgrx::pg_sys::ProcessUtility_hook;
+    PREV_PROCESS_UTILITY_HOOK = pgrx::pg_sys::ProcessUtility_hook;
 
-    pgrx::pg_sys::ProcessUtility_hook =
-        Some(process_utility_hook);
+    pgrx::pg_sys::ProcessUtility_hook = Some(process_utility_hook);
 }
 
 /// Load configuration from JSON file
@@ -83,14 +77,21 @@ fn load_config() {
     match ValidatorConfig::load_from_file(&config_path) {
         Ok(config) => {
             let validator = QueryValidator::new(config);
-            unsafe { VALIDATOR = Some(validator); }
+            unsafe {
+                VALIDATOR = Some(validator);
+            }
             pgrx::log!("pg_query_validator: Config loaded from {}", config_path);
         }
         Err(e) => {
-            pgrx::warning!("pg_query_validator: Failed to load config: {}. Using defaults.", e);
+            pgrx::warning!(
+                "pg_query_validator: Failed to load config: {}. Using defaults.",
+                e
+            );
             let config = ValidatorConfig::default();
             let validator = QueryValidator::new(config);
-            unsafe { VALIDATOR = Some(validator); }
+            unsafe {
+                VALIDATOR = Some(validator);
+            }
         }
     }
 }
@@ -163,19 +164,38 @@ unsafe extern "C-unwind" fn process_utility_hook(
 
     // Call previous hook or standard handler
     if let Some(prev_hook) = PREV_PROCESS_UTILITY_HOOK {
-        prev_hook(pstmt, query_string, read_only_tree, context,
-                  params, query_env, dest, query_completion);
+        prev_hook(
+            pstmt,
+            query_string,
+            read_only_tree,
+            context,
+            params,
+            query_env,
+            dest,
+            query_completion,
+        );
     } else {
         pgrx::pg_sys::standard_ProcessUtility(
-            pstmt, query_string, read_only_tree, context,
-            params, query_env, dest, query_completion);
+            pstmt,
+            query_string,
+            read_only_tree,
+            context,
+            params,
+            query_env,
+            dest,
+            query_completion,
+        );
     }
 }
 
 unsafe fn get_query_text(pstate: *mut pgrx::pg_sys::ParseState) -> Option<String> {
-    if pstate.is_null() { return None; }
+    if pstate.is_null() {
+        return None;
+    }
     let ps = &*pstate;
-    if ps.p_sourcetext.is_null() { return None; }
+    if ps.p_sourcetext.is_null() {
+        return None;
+    }
     let c_str = CStr::from_ptr(ps.p_sourcetext);
     c_str.to_str().ok().map(|s| s.to_string())
 }
@@ -216,7 +236,10 @@ fn validate_query(query_text: &str) -> String {
 }
 
 /// Determines whether the request is system-generated (not user-generated)
-unsafe fn is_system_query(query: *mut pgrx::pg_sys::Query, pstate: *mut pgrx::pg_sys::ParseState) -> bool {
+unsafe fn is_system_query(
+    query: *mut pgrx::pg_sys::Query,
+    pstate: *mut pgrx::pg_sys::ParseState,
+) -> bool {
     if query.is_null() {
         return false;
     }
@@ -227,7 +250,10 @@ unsafe fn is_system_query(query: *mut pgrx::pg_sys::Query, pstate: *mut pgrx::pg
     // QSRC_ORIGINAL = query from the user
     // Other values = system/internal queries
     if q.querySource != pgrx::pg_sys::QuerySource::QSRC_ORIGINAL {
-        pgrx::log!("pg_query_validator: Skipping system query (source: {:?})", q.querySource);
+        pgrx::log!(
+            "pg_query_validator: Skipping system query (source: {:?})",
+            q.querySource
+        );
         return true;
     }
 
@@ -237,14 +263,24 @@ unsafe fn is_system_query(query: *mut pgrx::pg_sys::Query, pstate: *mut pgrx::pg
         if let Ok(c_str) = CStr::from_ptr(app_name).to_str() {
             let app = c_str.to_lowercase();
             let system_apps = [
-                "pg_dump", "pg_restore", "vacuum", "autovacuum",
-                "wal sender", "walsender", "walwriter", "bgworker",
-                "archiver", "stats collector"
+                "pg_dump",
+                "pg_restore",
+                "vacuum",
+                "autovacuum",
+                "wal sender",
+                "walsender",
+                "walwriter",
+                "bgworker",
+                "archiver",
+                "stats collector",
             ];
 
             for sys_app in &system_apps {
                 if app.contains(sys_app) {
-                    pgrx::log!("pg_query_validator: Skipping query from system app: {}", c_str);
+                    pgrx::log!(
+                        "pg_query_validator: Skipping query from system app: {}",
+                        c_str
+                    );
                     return true;
                 }
             }
@@ -261,7 +297,8 @@ unsafe fn is_system_query(query: *mut pgrx::pg_sys::Query, pstate: *mut pgrx::pg
                 // Пропускаем запросы к системным каталогам
                 if source_upper.contains("PG_CATALOG.")
                     || source_upper.contains("INFORMATION_SCHEMA.")
-                    || (source_upper.contains("PG_") && !source_upper.contains(" FROM PG_")) {
+                    || (source_upper.contains("PG_") && !source_upper.contains(" FROM PG_"))
+                {
                     pgrx::log!("pg_query_validator: Skipping query to system catalog");
                     return true;
                 }

@@ -92,9 +92,18 @@ pub enum RuleType {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum CommandType {
-    Select, Insert, Update, Delete,
-    Create, Drop, Alter, Truncate, Copy,
-    Grant, Revoke, All,
+    Select,
+    Insert,
+    Update,
+    Delete,
+    Create,
+    Drop,
+    Alter,
+    Truncate,
+    Copy,
+    Grant,
+    Revoke,
+    All,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -130,27 +139,58 @@ pub struct RateLimiting {
     pub enabled: bool,
 }
 
-fn default_true() -> bool { true }
-fn default_max_query_length() -> usize { 1_000_000 }
-fn default_max_statements() -> usize { 10 }
-fn default_max_tables() -> usize { 50 }
-fn default_max_qps() -> u32 { 100 }
-fn default_max_qpm() -> u32 { 1000 }
-fn default_query_too_long_msg() -> String { "Query exceeds maximum allowed length".into() }
-fn default_blocked_pattern_msg() -> String { "Query matches a blocked pattern".into() }
-fn default_where_required_msg() -> String { "WHERE clause is required".into() }
-fn default_ddl_blocked_msg() -> String { "DDL operations are not allowed".into() }
-fn default_access_denied_msg() -> String { "Access denied".into() }
-fn default_keyword_blocked_msg() -> String { "Query contains a blocked keyword".into() }
+fn default_true() -> bool {
+    true
+}
+fn default_max_query_length() -> usize {
+    1_000_000
+}
+fn default_max_statements() -> usize {
+    10
+}
+fn default_max_tables() -> usize {
+    50
+}
+fn default_max_qps() -> u32 {
+    100
+}
+fn default_max_qpm() -> u32 {
+    1000
+}
+fn default_query_too_long_msg() -> String {
+    "Query exceeds maximum allowed length".into()
+}
+fn default_blocked_pattern_msg() -> String {
+    "Query matches a blocked pattern".into()
+}
+fn default_where_required_msg() -> String {
+    "WHERE clause is required".into()
+}
+fn default_ddl_blocked_msg() -> String {
+    "DDL operations are not allowed".into()
+}
+fn default_access_denied_msg() -> String {
+    "Access denied".into()
+}
+fn default_keyword_blocked_msg() -> String {
+    "Query contains a blocked keyword".into()
+}
 
 impl Default for GlobalSettings {
     fn default() -> Self {
         Self {
-            enabled: true, log_queries: false, log_blocked: true,
-            max_query_length: 1_000_000, max_statements: 10,
-            block_ddl: false, block_truncate: false, block_copy: false,
-            require_where_clause: true, require_limit: false,
-            max_tables_in_query: 50, blocked_keywords: Vec::new(),
+            enabled: true,
+            log_queries: false,
+            log_blocked: true,
+            max_query_length: 1_000_000,
+            max_statements: 10,
+            block_ddl: false,
+            block_truncate: false,
+            block_copy: false,
+            require_where_clause: true,
+            require_limit: false,
+            max_tables_in_query: 50,
+            blocked_keywords: Vec::new(),
             error_messages: ErrorMessages::default(),
         }
     }
@@ -174,14 +214,13 @@ impl ValidatorConfig {
         if !path.exists() {
             return Err(format!("Config file not found: {}", path.display()));
         }
-        let content = fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read config: {}", e))?;
+        let content =
+            fs::read_to_string(path).map_err(|e| format!("Failed to read config: {}", e))?;
         Self::from_json(&content)
     }
 
     pub fn from_json(json: &str) -> Result<Self, String> {
-        serde_json::from_str(json)
-            .map_err(|e| format!("Failed to parse config JSON: {}", e))
+        serde_json::from_str(json).map_err(|e| format!("Failed to parse config JSON: {}", e))
     }
 
     pub fn validate(&self) -> Result<(), String> {

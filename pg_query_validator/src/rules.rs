@@ -39,8 +39,13 @@ pub fn extract_table_names(query: &str) -> Vec<String> {
 
     if let Some(pos) = qu.find(" FROM ") {
         let after = &query[pos + 6..];
-        if let Some(table) = after.split(|c: char| c.is_whitespace() || c == ',' || c == '(').next() {
-            if !table.is_empty() { tables.push(table.to_string()); }
+        if let Some(table) = after
+            .split(|c: char| c.is_whitespace() || c == ',' || c == '(')
+            .next()
+        {
+            if !table.is_empty() {
+                tables.push(table.to_string());
+            }
         }
     }
     tables
@@ -52,11 +57,21 @@ pub fn count_statements(query: &str) -> usize {
     let mut string_char = ' ';
     for ch in query.chars() {
         if in_string {
-            if ch == string_char { in_string = false; }
+            if ch == string_char {
+                in_string = false;
+            }
         } else {
-            if ch == '\'' || ch == '"' { in_string = true; string_char = ch; }
-            else if ch == ';' { count += 1; }
+            if ch == '\'' || ch == '"' {
+                in_string = true;
+                string_char = ch;
+            } else if ch == ';' {
+                count += 1;
+            }
         }
     }
-    if !query.trim().is_empty() && count == 0 { 1 } else { count }
+    if !query.trim().is_empty() && count == 0 {
+        1
+    } else {
+        count
+    }
 }

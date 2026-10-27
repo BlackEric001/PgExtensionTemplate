@@ -15,23 +15,16 @@ pub fn default_config_path() -> String {
         }
 
         if let Some(pgdata) = std::env::var_os("PGDATA") {
-            candidates.push(
-                PathBuf::from(pgdata)
-                    .join("pg_query_validator.json"),
-            );
+            candidates.push(PathBuf::from(pgdata).join("pg_query_validator.json"));
         }
     }
 
     // Linux and other Unix-like systems
     #[cfg(unix)]
     {
-        candidates.push(
-            PathBuf::from("/etc/postgresql/pg_query_validator.json"),
-        );
+        candidates.push(PathBuf::from("/etc/postgresql/pg_query_validator.json"));
 
-        candidates.push(
-            PathBuf::from("/var/lib/postgresql/pg_query_validator.json"),
-        );
+        candidates.push(PathBuf::from("/var/lib/postgresql/pg_query_validator.json"));
     }
 
     for path in candidates {
